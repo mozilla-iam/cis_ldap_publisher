@@ -1,0 +1,24 @@
+.idea/
+env/
+env3/
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+ldap_publisher/__pycache__/
+ldap_publisher/node_modules/
+ldap_publisher/.requirements/
+ldap_publisher/*.pyc
+# Serverless directories
+.serverless

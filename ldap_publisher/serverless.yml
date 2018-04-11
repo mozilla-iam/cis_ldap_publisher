@@ -1,0 +1,73 @@
+service: cis-hris-publisher
+plugins:
+  - serverless-python-requirements
+custom:
+  stage: ${env:STAGE}
+  pythonRequirements:
+    dockerizePip: false
+    dockerImage: mozillaiam/docker-sls:latest
+    cleanupZipHelper: true
+    pipCmdExtraArgs:
+        - --cache-dir
+        - .requirements-cache
+provider:
+  name: aws
+  runtime: python3.6
+  stage: ${env:STAGE}
+  region: us-west-2
+  iamRoleStatements:
+      -  Effect: "Allow"
+         Action:
+           - "s3:ListBucket"
+           - "s3:GetBucketLocation"
+           - "s3:ListAllMyBuckets"
+           - "s3:GetBucketTagging"
+         Resource:
+           - "*"
+      -  Effect: "Allow"
+         Action:
+           - "s3:GetObject"
+         Resource:
+           - "arn:aws:s3:::hris-data-${self:custom.stage}.mozilla.com**"
+      -
+        Effect: "Allow"
+        Action:
+          - "sts:AssumeRole"
+        Resource:
+          - ${file(${self:custom.stage}-vars.yml):CIS_IAM_ROLE_ARN}
+      -
+        Effect: "Allow"
+        Action:
+          - "dynamodb:GetItem"
+          - "dynamodb:Query"
+          - "dynamodb:Scan"
+        Resource:
+          - "arn:aws:dynamodb:*:*:table/credential-store"
+      -
+        Effect: "Allow"
+        Action:
+          - "kms:Encrypt"
+          - "kms:GenerateDataKey"
+        Resource:
+          - ${file(${self:custom.stage}-vars.yml):SIGNING_KEY_ARN}
+      -
+        Effect: "Allow"
+        Action:
+          - "logs:*"
+        Resource:
+          - "arn:aws:logs:*:*:log-group:/cis/**"
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:HeadObject
+      Resource: arn:aws:s3:::${file(config.${self:provider.stage}.yml):CIS_LDAP_DIFF_BUCKET}**
+functions:
+  hris-data-processor:
+    timeout: 300
+    handler: publish.handle
+    environment: ${file(${self:custom.stage}-vars.yml)}
+    events:
+      - schedule:
+          name: cis-hris-publisher-4-hour-sync
+          description: 'Every 4 hours sync hris extract with the identity vault.'
+          rate: rate(4 hours)
