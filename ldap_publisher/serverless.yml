@@ -56,11 +56,11 @@ provider:
           - "logs:*"
         Resource:
           - "arn:aws:logs:*:*:log-group:/cis/**"
-    - Effect: Allow
-      Action:
-        - s3:GetObject
-        - s3:HeadObject
-      Resource: arn:aws:s3:::${file(config.${self:provider.stage}.yml):CIS_LDAP_DIFF_BUCKET}**
+      - Effect: Allow
+        Action:
+          - s3:GetObject
+          - s3:HeadObject
+        Resource: arn:aws:s3:::${file(${self:custom.stage}-vars.yml):CIS_LDAP_DIFF_BUCKET}**
 functions:
   hris-data-processor:
     timeout: 300
