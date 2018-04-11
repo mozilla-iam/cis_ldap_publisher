@@ -4,6 +4,7 @@ import ldapfroms3
 import logging
 import os
 import task
+import threading
 
 from cis.libs import utils
 from cis.libs.api import Person
@@ -39,6 +40,24 @@ def assume_role_session():
         region_name='us-west-2'
     )
 
+def publish(email, boto_session, cis_publisher_session, ldap_json, person_api):
+    # If user valid go ahead and push them onto a list to use as a stack.
+    vault_record = person_api.get_userinfo('ad|{}|{}'.format(os.getenv('LDAP_NAMESPACE'), email.split('@')[0]))
+    logger.info('Preparing to process: {}'.format(email))
+    logger.debug('Enriching data fields for user with: {}'.format(json.dumps(ldap_json)))
+
+    if vault_record.get('primaryEmail') is not None:
+        logger.info('A vault record has been located for user: {}'.format(email))
+        t = task.CISTask(
+            boto_session=cis_publisher_session,
+            vault_record=vault_record,
+            ldap_groups=ldap_json.get('groups'),
+            additional_data=ldap_json
+        )
+        t.send()
+    else:
+        logger.warn('A user profile could not be located in the identity vault for: {}'.format(email))
+        pass
 
 def handle(event=None, context={}):
     os.environ["CIS_OAUTH2_CLIENT_ID"] = get_secret(
@@ -53,6 +72,9 @@ def handle(event=None, context={}):
     people.connect()
     people_json = people.all
 
+    boto_session = boto3.session.Session(
+        region_name='us-west-2'
+    )
     cis_publisher_session = assume_role_session()
 
     person_api = Person(person_api_config={
@@ -65,21 +87,13 @@ def handle(event=None, context={}):
         }
     )
 
+    threads = []
+
     for email, data_fields in people_json.items():
-        logger.info('Preparing to process: {}'.format(email))
-        logger.debug('Enriching data fields for user with: {}'.format(json.dumps(data_fields)))
+        ldap_json = data_fields
+        t = threading.Thread(target=publish, args=[email, boto_session, cis_publisher_session, ldap_json, person_api])
+        threads.append(t)
+        t.start()
 
-        vault_record = person_api.get_userinfo('ad|{}|{}'.format(os.getenv('LDAP_NAMESPACE'), email.split('@')[0]))
-
-        if vault_record.get('primaryEmail') is not None:
-            logger.info('A vault record has been located for user: {}'.format(email))
-            t = task.CISTask(
-                boto_session=cis_publisher_session,
-                vault_record=vault_record,
-                ldap_groups=data_fields.get('groups'),
-                additional_data=data_fields
-            )
-            t.send()
-        else:
-            logger.warn('A user profile could not be located in the identity vault for: {}'.format(email))
-            pass
+    for thread in threads:
+        thread.join()
