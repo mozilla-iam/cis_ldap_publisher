@@ -1,4 +1,4 @@
-service: cis-hris-publisher
+service: cis-ldap-publisher
 plugins:
   - serverless-python-requirements
 custom:
@@ -62,7 +62,7 @@ provider:
           - s3:HeadObject
         Resource: arn:aws:s3:::${file(${self:custom.stage}-vars.yml):CIS_LDAP_DIFF_BUCKET}**
 functions:
-  hris-data-processor:
+  ldap-data-processor:
     timeout: 300
     handler: publish.handle
     environment: ${file(${self:custom.stage}-vars.yml)}
